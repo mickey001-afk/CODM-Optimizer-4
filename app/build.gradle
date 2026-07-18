@@ -32,13 +32,6 @@ android {
     lint {
         abortOnError false
         checkReleaseBuilds false
-        disable 'AllowBackup'
-    }
-
-    packagingOptions {
-        resources {
-            excludes += ['META-INF/DEPENDENCIES']
-        }
     }
 }
 
