@@ -17,17 +17,20 @@ import java.util.List;
 
 public class GameService extends Service {
 
-    private static final String CHANNEL_ID = "codm_channel";
-    private Handler handler = new Handler(Looper.getMainLooper());
+    private static final String CHANNEL_ID = "codm_optimizer";
+    private static final int NOTIF_ID = 1;
+
+    private final Handler handler =
+        new Handler(Looper.getMainLooper());
     private boolean running = false;
 
-    private final String[] CODM_PKGS = {
+    private static final String[] CODM_PKGS = {
         "com.activision.callofduty.shooter",
         "com.garena.game.codm",
         "com.vng.codmvn"
     };
 
-    private final String[] KILL_LIST = {
+    private static final String[] KILL_LIST = {
         "com.facebook.katana",
         "com.instagram.android",
         "com.twitter.android",
@@ -45,43 +48,48 @@ public class GameService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        createChannel();
+        createNotificationChannel();
     }
 
     @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
+    public int onStartCommand(
+            Intent intent, int flags, int startId) {
         running = true;
 
-        Notification n = new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("⚡ CODM Optimizer")
-            .setContentText("Monitoring game performance...")
-            .setSmallIcon(android.R.drawable.ic_menu_manage)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .build();
+        Notification notification =
+            new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("CODM Optimizer Active")
+                .setContentText("Monitoring game performance")
+                .setSmallIcon(
+                    android.R.drawable.ic_menu_manage)
+                .setPriority(
+                    NotificationCompat.PRIORITY_LOW)
+                .setOngoing(true)
+                .build();
 
-        startForeground(1, n);
+        startForeground(NOTIF_ID, notification);
         startMonitorLoop();
 
         return START_STICKY;
     }
 
-    void startMonitorLoop() {
+    private void startMonitorLoop() {
         handler.postDelayed(new Runnable() {
+            @Override
             public void run() {
                 if (!running) return;
 
                 boolean codmRunning = false;
                 for (String pkg : CODM_PKGS) {
-                    if (isRunning(pkg)) {
+                    if (isAppRunning(pkg)) {
                         codmRunning = true;
                         break;
                     }
                 }
 
                 if (codmRunning) {
-                    cleanForGame();
-                    keepCODMPriority();
+                    cleanMemory();
+                    maintainPriority();
                 }
 
                 handler.postDelayed(this, 15000);
@@ -89,80 +97,101 @@ public class GameService extends Service {
         }, 10000);
     }
 
-    void cleanForGame() {
+    private void cleanMemory() {
         ActivityManager am =
-            (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            (ActivityManager) getSystemService(
+                ACTIVITY_SERVICE);
 
         for (String pkg : KILL_LIST) {
             am.killBackgroundProcesses(pkg);
         }
 
-        exec("echo 1 > /proc/sys/vm/drop_caches");
-        exec("sync");
+        runRoot("echo 1 > /proc/sys/vm/drop_caches");
     }
 
-    void keepCODMPriority() {
+    private void maintainPriority() {
         for (String pkg : CODM_PKGS) {
-            String pid = getPID(pkg);
+            String pid = getPid(pkg);
             if (pid != null && !pid.isEmpty()) {
-                exec("renice -20 " + pid);
-                exec("echo -1000 > /proc/" + pid + "/oom_score_adj");
+                runRoot("renice -20 " + pid);
+                runRoot("echo -1000 > /proc/"
+                    + pid + "/oom_score_adj");
                 break;
             }
         }
     }
 
-    boolean isRunning(String pkg) {
+    private boolean isAppRunning(String packageName) {
         try {
             ActivityManager am =
-                (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+                (ActivityManager) getSystemService(
+                    ACTIVITY_SERVICE);
             List<ActivityManager.RunningAppProcessInfo> procs =
                 am.getRunningAppProcesses();
             if (procs != null) {
-                for (ActivityManager.RunningAppProcessInfo p : procs) {
+                for (ActivityManager.RunningAppProcessInfo p
+                        : procs) {
                     for (String s : p.pkgList) {
-                        if (s.equals(pkg)) return true;
+                        if (s.equals(packageName)) {
+                            return true;
+                        }
                     }
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
         return false;
     }
 
-    String getPID(String pkg) {
+    private String getPid(String packageName) {
         try {
-            Process p = Runtime.getRuntime()
-                .exec(new String[]{"su", "-c", "pidof " + pkg});
+            Process p = Runtime.getRuntime().exec(
+                new String[]{"su", "-c",
+                    "pidof " + packageName}
+            );
             byte[] buf = new byte[64];
             int n = p.getInputStream().read(buf);
             p.waitFor();
-            return n > 0 ? new String(buf, 0, n).trim() : null;
-        } catch (Exception e) {
-            return null;
+            if (n > 0) {
+                return new String(buf, 0, n).trim();
+            }
+        } catch (Exception ignored) {
         }
+        return null;
     }
 
-    void exec(String cmd) {
+    private void runRoot(String cmd) {
         try {
             Runtime.getRuntime()
                 .exec(new String[]{"su", "-c", cmd})
                 .waitFor();
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 
-    void createChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel ch = new NotificationChannel(
-                CHANNEL_ID, "CODM Optimizer",
-                NotificationManager.IMPORTANCE_LOW);
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT
+                >= Build.VERSION_CODES.O) {
+            NotificationChannel channel =
+                new NotificationChannel(
+                    CHANNEL_ID,
+                    "CODM Optimizer",
+                    NotificationManager.IMPORTANCE_LOW
+                );
+            channel.setDescription(
+                "Game performance monitoring");
             NotificationManager nm =
                 getSystemService(NotificationManager.class);
-            if (nm != null) nm.createNotificationChannel(ch);
+            if (nm != null) {
+                nm.createNotificationChannel(channel);
+            }
         }
     }
 
     @Override
-    public IBinder onBind(Intent intent) { return null; }
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
 
     @Override
     public void onDestroy() {
@@ -170,4 +199,4 @@ public class GameService extends Service {
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
-}
+            }
