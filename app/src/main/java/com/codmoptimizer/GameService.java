@@ -11,8 +11,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 
-import androidx.core.app.NotificationCompat;
-
 import java.util.List;
 
 public class GameService extends Service {
@@ -57,13 +55,11 @@ public class GameService extends Service {
         running = true;
 
         Notification notification =
-            new NotificationCompat.Builder(this, CHANNEL_ID)
+            new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("CODM Optimizer Active")
-                .setContentText("Monitoring game performance")
+                .setContentText("Monitoring game")
                 .setSmallIcon(
                     android.R.drawable.ic_menu_manage)
-                .setPriority(
-                    NotificationCompat.PRIORITY_LOW)
                 .setOngoing(true)
                 .build();
 
@@ -178,10 +174,9 @@ public class GameService extends Service {
                     "CODM Optimizer",
                     NotificationManager.IMPORTANCE_LOW
                 );
-            channel.setDescription(
-                "Game performance monitoring");
             NotificationManager nm =
-                getSystemService(NotificationManager.class);
+                getSystemService(
+                    NotificationManager.class);
             if (nm != null) {
                 nm.createNotificationChannel(channel);
             }
@@ -199,4 +194,4 @@ public class GameService extends Service {
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
-            }
+}
