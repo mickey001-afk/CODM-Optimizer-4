@@ -22,18 +22,30 @@ jobs:
 
       - name: Setup Android SDK
         run: |
+          sudo apt-get update -y
           sudo apt-get install -y wget unzip
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+
+          wget -q \
+            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+            -O cmdtools.zip
+
           mkdir -p $HOME/android-sdk/cmdline-tools
-          unzip -q commandlinetools-linux-11076708_latest.zip -d $HOME/android-sdk/cmdline-tools
-          mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
+          unzip -q cmdtools.zip -d $HOME/android-sdk/cmdline-tools
+          mv $HOME/android-sdk/cmdline-tools/cmdline-tools \
+             $HOME/android-sdk/cmdline-tools/latest
+
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/build-tools/34.0.0" >> $GITHUB_PATH
 
-      - name: Accept Licenses and Install SDK
+      - name: Accept Licenses
         run: |
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+            --licenses || true
+
+      - name: Install SDK Packages
+        run: |
           $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
             "platforms;android-34" \
             "build-tools;34.0.0" \
@@ -42,6 +54,7 @@ jobs:
       - name: Create local.properties
         run: |
           echo "sdk.dir=$HOME/android-sdk" > local.properties
+          cat local.properties
 
       - name: Download Gradle Wrapper JAR
         run: |
@@ -49,20 +62,23 @@ jobs:
           curl -fsSL \
             -o gradle/wrapper/gradle-wrapper.jar \
             "https://raw.githubusercontent.com/gradle/gradle/v8.1.1/gradle/wrapper/gradle-wrapper.jar"
+          ls -la gradle/wrapper/
 
       - name: Make gradlew executable
-        run: chmod +x gradlew
-
-      - name: Build APK
         run: |
-          ./gradlew assembleDebug \
-            --no-daemon \
-            --stacktrace \
-            --info \
-            -Dorg.gradle.java.home=$JAVA_HOME
+          chmod +x gradlew
+          ls -la gradlew
 
-      - name: Show APK location
-        run: find . -name "*.apk" -type f
+      - name: Build Debug APK
+        run: |
+          ./gradlew assembleDebug --no-daemon --stacktrace
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+          JAVA_HOME: ${{ env.JAVA_HOME }}
+
+      - name: Find APK
+        run: |
+          find . -name "*.apk" -type f
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
